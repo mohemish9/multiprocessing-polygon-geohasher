@@ -87,6 +87,7 @@ def polygon_to_geohashes(polygon, precision, inner=True, processes=1):
     inner_geohashes = set()
     outer_geohashes = set()
 
+    
     envelope = polygon.envelope
 
     # optimization: start with lower level geohash
@@ -102,7 +103,7 @@ def polygon_to_geohashes(polygon, precision, inner=True, processes=1):
         testing_geohashes.put(low_geo)
 
     while not testing_geohashes.empty():
-        low_poly = prep(geohash_to_polygon(low_geo))
+        low_poly = geohash_to_polygon(low_geo)
         condition_1 = envelope.contains(low_poly)
         condition_2 = envelope.intersects(low_poly)
         if condition_1:
