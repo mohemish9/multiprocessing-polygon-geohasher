@@ -103,6 +103,7 @@ def polygon_to_geohashes(polygon, precision, inner=True, processes=1):
         testing_geohashes.put(low_geo)
 
     while not testing_geohashes.empty():
+        low_geo = testing_geohashes.get()
         low_poly = geohash_to_polygon(low_geo)
         condition_1 = envelope.contains(low_poly)
         condition_2 = envelope.intersects(low_poly)
