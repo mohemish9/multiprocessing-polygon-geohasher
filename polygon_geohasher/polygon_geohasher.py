@@ -3,7 +3,7 @@ import queue
 
 from shapely import geometry
 from shapely.ops import cascaded_union
-
+from shapely.prepared import prep
 
 def geohash_to_polygon(geo):
     """
@@ -20,7 +20,7 @@ def geohash_to_polygon(geo):
     return geometry.Polygon([corner_1, corner_2, corner_3, corner_4, corner_1])
 
 
-def polygon_to_geohashes(polygon, precision, inner=True):
+def old_polygon_to_geohashes(polygon, precision, inner=True):
     """
     :param polygon: shapely polygon.
     :param precision: int. Geohashes' precision that form resulting polygon.
@@ -70,6 +70,80 @@ def polygon_to_geohashes(polygon, precision, inner=True):
                         testing_geohashes.put(neighbor)
 
     return inner_geohashes
+
+
+
+
+def polygon_to_geohashes(polygon, precision, inner=True, processes=1):
+    """
+    :param polygon: shapely polygon.
+    :param precision: int. Geohashes' precision that form resulting polygon.
+    :param inner: bool, default 'True'. If false, geohashes that are completely outside from the polygon are ignored.
+    :param processes: int, default 1. Number of parallel processes.
+    :return: set. Set of geohashes that form the polygon.
+    """
+    # edites made using the following refernce: https://otonomo.io/how-to-count-large-scale-geohashes/
+    geohash_chars='0123456789bcdefghjkmnpgrstuvwxyz'
+    inner_geohashes = set()
+    outer_geohashes = set()
+
+    envelope = polygon.envelope
+
+    # optimization: start with lower level geohash
+    start_level = 2
+    low_level_geohashes = old_polygon_to_geohashes(polygon,start_level,False)
+    while (start_level < precision) and (len(low_level_geohashes)==0):
+        start_level = start_level + 1
+        low_level_geohashes = old_polygon_to_geohashes(polygon,start_level,False)
+
+    # push initial geohashes into the queue
+    testing_geohashes = queue.Queue()
+    for low_geo in low_level_geohashes:
+        testing_geohashes.put(low_geo)
+
+    while not testing_geohashes.empty():
+        low_poly = prep(geohash_to_polygon(low_geo))
+        condition_1 = envelope.contains(low_poly)
+        condition_2 = envelope.intersects(low_poly)
+        if condition_1:
+            inner_geohashes.add(low_geo)
+        elif condition_2:
+            if len(low_geo) < precision:
+                for c in geohash_chars:
+                    testing_geohashes.put(low_geo+c)
+            elif not inner:
+                inner_geohashes.add(low_geo)
+            else:
+                outer_geohashes.add(low_geo)
+
+    full_geo_hashes = hashes_generator(inner_geohashes, precision)
+
+    return full_geo_hashes
+
+
+
+def hashes_generator (inner_geohashes, precision) :
+    for h in inner_geohashes:
+        h_len = len(h)
+        if h_len < precision:
+            missing_digits = precision - h_len
+            filler = 32 ** missing_digits
+            for i in range (filler) :
+                yield "{h}{counter}".format(h=h,
+                        counter = int_to_geohash(i,missing_digits))
+        else:
+            yield h[:precision]
+
+
+def int_to_geohash(n, length) :
+    geohash_chars ='0123456789bcdefghjkmnpgrstuvwxyz'
+    digits = []
+    while True:
+        digits.insert(0, geohash_chars[n % 32])
+        n = n // 32
+        if n == 0:
+            break
+    return "".join(digits) .fill (length)
 
 
 def geohashes_to_polygon(geohashes):
