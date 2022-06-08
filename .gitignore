@@ -156,3 +156,4 @@ venv.bak/
 .mypy_cache/
 .pypirc
 
+tests/src/polygon-geohasher/
